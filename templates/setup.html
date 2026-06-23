@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuração — AutoPost</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="nav">
+        <a href="/" class="nav-logo">Auto<span>Post</span></a>
+        <div class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="{{ url_for('setup') }}">Configuração</a>
+        </div>
+        <div class="nav-cta">
+            <a href="{{ url_for('index') }}" class="btn-outline">Dashboard</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="setup-header">
+            <h1>Configuração de Credenciais</h1>
+            <p>Conecte suas contas do Facebook, Instagram e TikTok</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('save_config') }}" class="config-form">
+            <div class="platform-config">
+                <h2>Facebook</h2>
+                <p class="help-text">
+                    <a href="https://developers.facebook.com/apps/" target="_blank">Criar App no Facebook Developers</a>
+                </p>
+                <div class="form-group">
+                    <label>Access Token</label>
+                    <input type="text" name="facebook_access_token" value="{{ config.FACEBOOK_ACCESS_TOKEN }}" placeholder="EAAD...">
+                </div>
+                <div class="form-group">
+                    <label>Page ID</label>
+                    <input type="text" name="facebook_page_id" value="{{ config.FACEBOOK_PAGE_ID }}" placeholder="123456789">
+                </div>
+            </div>
+
+            <div class="platform-config">
+                <h2>Instagram</h2>
+                <p class="help-text">
+                    <a href="https://developers.facebook.com/docs/instagram-api/" target="_blank">Guia da Instagram Graph API</a>
+                </p>
+                <div class="form-group">
+                    <label>Access Token</label>
+                    <input type="text" name="instagram_access_token" value="{{ config.INSTAGRAM_ACCESS_TOKEN }}" placeholder="IGQVJ...">
+                </div>
+                <div class="form-group">
+                    <label>User ID</label>
+                    <input type="text" name="instagram_user_id" value="{{ config.INSTAGRAM_USER_ID }}" placeholder="178414...">
+                </div>
+            </div>
+
+            <div class="platform-config">
+                <h2>TikTok</h2>
+                <p class="help-text">
+                    <a href="https://developers.tiktok.com/apps/" target="_blank">Criar App no TikTok Developers</a>
+                </p>
+                <div class="form-group">
+                    <label>Client Key</label>
+                    <input type="text" name="tiktok_client_key" id="tiktok_client_key" value="{{ config.TIKTOK_CLIENT_KEY }}" placeholder="awd...">
+                </div>
+                <div class="form-group">
+                    <label>Client Secret</label>
+                    <input type="text" name="tiktok_client_secret" id="tiktok_client_secret" value="{{ config.TIKTOK_CLIENT_SECRET }}" placeholder="awd...">
+                </div>
+                <div class="form-group">
+                    <label>Access Token</label>
+                    <input type="text" name="tiktok_access_token" value="{{ config.TIKTOK_ACCESS_TOKEN }}" placeholder="clt..." readonly>
+                </div>
+                <div class="form-group">
+                    <label>Open ID</label>
+                    <input type="text" name="tiktok_open_id" value="{{ config.TIKTOK_OPEN_ID }}" placeholder="open_id..." readonly>
+                </div>
+                <div style="margin-top: 16px;">
+                    <a href="{{ url_for('auth_tiktok') }}" class="btn-oauth-tiktok">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        Conectar com TikTok
+                    </a>
+                    <p style="font-size:0.8rem;color:#888;margin-top:8px;">
+                        Redireciona para o TikTok para autorizar o App. Configure o Redirect URL como <code>{{ url_for('auth_tiktok_callback', _external=True) }}</code>
+                    </p>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-publish">Salvar Configurações</button>
+        </form>
+
+        <div class="setup-guide">
+            <h2>Guia Rápido de Configuração</h2>
+
+            <div class="guide-section">
+                <h3>Facebook</h3>
+                <ol>
+                    <li>Acesse <a href="https://developers.facebook.com/apps/" target="_blank">Facebook Developers</a></li>
+                    <li>Crie um App do tipo "Negócios" ou "Consumidor"</li>
+                    <li>Adicione o produto "Facebook Login" e "Graph API"</li>
+                    <li>Gere um <strong>Access Token</strong> (Página &rarr; Ferramentas &rarr; Acesso a tokens)</li>
+                    <li>O <strong>Page ID</strong> está na sua página do Facebook (Sobre &rarr; ID da Página)</li>
+                </ol>
+            </div>
+
+            <div class="guide-section">
+                <h3>Instagram</h3>
+                <ol>
+                    <li>Você precisa de uma <strong>Conta Comercial ou de Criador</strong> no Instagram</li>
+                    <li>Conecte sua conta do Instagram a uma <strong>Página do Facebook</strong></li>
+                    <li>No Facebook Developers, adicione o produto "Instagram Graph API"</li>
+                    <li>Gere um token com as permissões: <code>instagram_basic, instagram_content_publish, pages_show_list</code></li>
+                    <li>O <strong>User ID</strong> é encontrado via <code>GET /me/accounts</code> ou <code>GET /me</code> na Graph API</li>
+                </ol>
+            </div>
+
+            <div class="guide-section">
+                <h3>TikTok</h3>
+                <ol>
+                    <li>Acesse <a href="https://developers.tiktok.com/apps/" target="_blank">TikTok Developers</a></li>
+                    <li>Crie um novo App e ative a "Content Posting API"</li>
+                    <li>Configure o Redirect URL para <code>{{ url_for('auth_tiktok_callback', _external=True) }}</code></li>
+                    <li>Preencha <strong>Client Key</strong> e <strong>Client Secret</strong> acima e clique em <strong>"Conectar com TikTok"</strong></li>
+                    <li>O <strong>Access Token</strong> e <strong>Open ID</strong> serão preenchidos automaticamente</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

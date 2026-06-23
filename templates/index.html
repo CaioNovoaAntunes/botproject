@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoPost — Publicador Multiplataforma</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="nav">
+        <a href="/" class="nav-logo">Auto<span>Post</span></a>
+        <div class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="{{ url_for('setup') }}">Configuração</a>
+        </div>
+        <div class="nav-cta">
+            <a href="{{ url_for('setup') }}" class="btn-outline">Configurar</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="hero">
+            <h1>Publique em todas as<br>redes de uma vez</h1>
+            <p>Envie seu vídeo para Facebook, Instagram e TikTok simultaneamente. Rápido, simples e direto.</p>
+
+            <div class="status-bar">
+                {% for platform, info in platforms_status.items() %}
+                <div class="platform-status {{ 'connected' if info.valid else 'disconnected' }}">
+                    <span class="platform-icon">
+                        {% if platform == 'facebook' %}FB{% elif platform == 'instagram' %}IG{% else %}TT{% endif %}
+                    </span>
+                    <span class="platform-name">{{ platform.capitalize() }}</span>
+                    <span class="status-dot {{ 'green' if info.valid else 'red' }}"></span>
+                    <span class="status-text">{{ 'Conectado' if info.valid else 'Desconectado' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Publicar Novo Vídeo</h2>
+            <form id="publishForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="video">Vídeo</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="video" name="video" accept="video/mp4,video/mov,video/avi,video/mkv,video/webm" required>
+                        <div class="file-input-fake">
+                            <span class="file-icon">+</span>
+                            <span class="file-text" id="fileText">MP4, MOV, AVI, MKV ou WEBM</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="title">Título</label>
+                    <input type="text" id="title" name="title" placeholder="Título do vídeo" maxlength="100" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Descrição</label>
+                    <textarea id="description" name="description" placeholder="Descrição do vídeo (opcional)" rows="3" maxlength="2000"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="tags">Tags (separadas por vírgula)</label>
+                    <input type="text" id="tags" name="tags" placeholder="ex: tecnologia, dicas, tutorial">
+                </div>
+
+                <div class="form-group">
+                    <label>Plataformas</label>
+                    <div class="platform-checkboxes">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="platforms" value="facebook" checked>
+                            <span class="checkbox-custom fb">Facebook</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="platforms" value="instagram" checked>
+                            <span class="checkbox-custom ig">Instagram</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="platforms" value="tiktok" checked>
+                            <span class="checkbox-custom tt">TikTok</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-publish" id="publishBtn">Publicar Agora</button>
+            </form>
+
+            <div id="progressArea" class="progress-area" style="display:none;">
+                <h3>Status da Publicação</h3>
+                <div id="results"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Histórico de Publicações</h2>
+            <div id="historyList">
+                <p class="empty-state">Nenhuma publicação realizada ainda.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById("video").addEventListener("change", function(e) {
+            const text = document.getElementById("fileText");
+            if (this.files.length > 0) {
+                text.textContent = this.files[0].name;
+                text.style.color = "#1a1a2e";
+            } else {
+                text.textContent = "MP4, MOV, AVI, MKV ou WEBM";
+                text.style.color = "#888";
+            }
+        });
+
+        document.getElementById("publishForm").addEventListener("submit", async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const btn = document.getElementById("publishBtn");
+            const progressArea = document.getElementById("progressArea");
+            const resultsDiv = document.getElementById("results");
+
+            btn.disabled = true;
+            btn.textContent = "Publicando...";
+            progressArea.style.display = "block";
+            resultsDiv.innerHTML = "";
+
+            try {
+                const response = await fetch("/publish", {
+                    method: "POST",
+                    body: formData,
+                });
+
+                const data = await response.json();
+                resultsDiv.innerHTML = "";
+
+                if (data.results) {
+                    data.results.forEach(function(result) {
+                        const card = document.createElement("div");
+                        card.className = "result-card " + (result.success ? "success" : "error");
+                        card.innerHTML = `
+                            <div class="result-header">
+                                <span class="result-platform">${result.platform.toUpperCase()}</span>
+                                <span class="result-status">${result.success ? "Sucesso" : "Erro"}</span>
+                            </div>
+                            <div class="result-body">
+                                ${result.success
+                                    ? "Post ID: " + (result.post_id || result.publish_id || "N/A")
+                                    : "Erro: " + (result.error || "Desconhecido")
+                                }
+                            </div>
+                        `;
+                        resultsDiv.appendChild(card);
+                    });
+                }
+
+                if (data.history) {
+                    updateHistory(data.history);
+                }
+
+            } catch (err) {
+                resultsDiv.innerHTML = `<div class="result-card error">
+                    <div class="result-header"><span>ERRO</span><span>Falha</span></div>
+                    <div class="result-body">Erro de conexão: ${err.message}</div>
+                </div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Publicar Novamente";
+            }
+        });
+
+        async function updateHistory(history) {
+            const container = document.getElementById("historyList");
+            if (!history || history.length === 0) {
+                container.innerHTML = '<p class="empty-state">Nenhuma publicação realizada ainda.</p>';
+                return;
+            }
+            container.innerHTML = "";
+            history.slice().reverse().forEach(function(item) {
+                const div = document.createElement("div");
+                div.className = "history-item";
+                const title = item.title || "Sem título";
+                const platforms = Array.isArray(item.platforms) ? item.platforms.join(", ") : "N/A";
+                const date = item.date || "";
+                div.innerHTML = `<strong>${title}</strong> <span class="history-platforms">${platforms}</span> <span class="history-date">${date}</span>`;
+                container.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
