@@ -1,4 +1,14 @@
+# Web framework
 Flask>=3.0.0
+
+# Carregar variaveis do .env
 python-dotenv>=1.0.0
+
+# Requisicoes HTTP (API TikTok, Facebook, Instagram)
 requests>=2.31.0
+
+# Upload de arquivos no Flask
 python-multipart>=0.0.6
+
+# Servidor de producao (Render, Railway, etc)
+gunicorn>=21.2.0
