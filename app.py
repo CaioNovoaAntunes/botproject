@@ -4,11 +4,18 @@ import threading
 import time
 import secrets
 import webbrowser
+import hashlib
+import base64
+import urllib.parse
+import logging
 from datetime import datetime
 import mimetypes
 import requests as http_requests
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from werkzeug.utils import secure_filename
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s")
+log = logging.getLogger(__name__)
 
 from config import Config
 from platforms.facebook import FacebookPublisher
@@ -227,21 +234,40 @@ def save_config():
 @app.route("/auth/tiktok")
 def auth_tiktok():
     client_key = app.config.get("TIKTOK_CLIENT_KEY", "")
+    log.info("=== INÍCIO FLUXO OAUTH TIKTOK ===")
+    log.info("client_key lida: '%s' (len=%d)", client_key, len(client_key))
+
     if not client_key:
+        log.error("client_key está vazia!")
         return jsonify({"success": False, "error": "CLIENT_KEY não configurada. Preencha no /setup primeiro."}), 400
 
     state = secrets.token_urlsafe(16)
     session["tiktok_oauth_state"] = state
+    log.info("state gerado: %s", state)
+
+    code_verifier = secrets.token_urlsafe(64)
+    session["tiktok_code_verifier"] = code_verifier
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode("ascii")).digest()
+    ).rstrip(b"=").decode("ascii")
+    log.info("code_verifier (primeiros 20): %s...", code_verifier[:20])
+    log.info("code_challenge: %s", code_challenge)
 
     redirect_uri = url_for("auth_tiktok_callback", _external=True)
-    auth_url = (
-        "https://www.tiktok.com/v2/auth/authorize/"
-        f"?client_key={client_key}"
-        f"&scope=user.info.basic,video.publish"
-        "&response_type=code"
-        f"&redirect_uri={redirect_uri}"
-        f"&state={state}"
-    )
+    log.info("redirect_uri gerada: %s", redirect_uri)
+
+    params = {
+        "client_key": client_key,
+        "scope": "user.info.basic,video.publish",
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    }
+    auth_url = "https://www.tiktok.com/v2/auth/authorize/?" + urllib.parse.urlencode(params)
+    log.info("URL de autorização gerada: %s", auth_url)
+    log.info("=== FIM FLUXO OAUTH TIKTOK ===")
     return redirect(auth_url)
 
 
@@ -251,21 +277,41 @@ def auth_tiktok_callback():
     state = request.args.get("state")
     error = request.args.get("error")
 
+    log.info("=== CALLBACK TIKTOK ===")
+    log.info("code: %s", "***" if code else "None")
+    log.info("state recebido: %s", state)
+    log.info("error: %s", error)
+    log.info("args completos: %s", dict(request.args))
+
     if error:
+        log.error("Erro retornado pelo TikTok: %s", error)
         return f"Erro na autoriza\u00e7\u00e3o TikTok: {error}", 400
 
     saved_state = session.pop("tiktok_oauth_state", None)
+    log.info("saved_state: %s", saved_state)
     if not state or not saved_state or state != saved_state:
+        log.error("state inválido! state=%s saved_state=%s", state, saved_state)
         return "Erro: state inv\u00e1lido (poss\u00edvel CSRF). Tente novamente.", 400
 
     if not code:
+        log.error("Código de autorização não recebido")
         return "Erro: c\u00f3digo de autoriza\u00e7\u00e3o n\u00e3o recebido.", 400
+
+    code_verifier = session.pop("tiktok_code_verifier", None)
+    log.info("code_verifier recuperado: %s", "***" if code_verifier else "None")
+    if not code_verifier:
+        log.error("code_verifier não encontrado na sessão")
+        return "Erro: code_verifier n\u00e3o encontrado na sess\u00e3o. Inicie o fluxo novamente.", 400
 
     client_key = app.config.get("TIKTOK_CLIENT_KEY", "")
     client_secret = app.config.get("TIKTOK_CLIENT_SECRET", "")
     redirect_uri = url_for("auth_tiktok_callback", _external=True)
+    log.info("client_key: '%s'", client_key)
+    log.info("client_secret: '%s'", "***" if client_secret else "vazio")
+    log.info("redirect_uri: %s", redirect_uri)
 
     try:
+        log.info("Fazendo POST para troca de token...")
         resp = http_requests.post(
             "https://open.tiktokapis.com/v2/oauth/token/",
             data={
@@ -274,12 +320,18 @@ def auth_tiktok_callback():
                 "code": code,
                 "grant_type": "authorization_code",
                 "redirect_uri": redirect_uri,
+                "code_verifier": code_verifier,
             },
             timeout=30,
         )
+        log.info("Status code da resposta: %d", resp.status_code)
+        log.info("Resposta bruta: %s", resp.text[:500])
+
         data = resp.json()
+        log.info("Resposta JSON: %s", json.dumps(data, indent=2)[:500])
 
         if "access_token" not in data:
+            log.error("Token não veio na resposta: %s", data)
             return f"Erro ao obter token: {json.dumps(data)}", 400
 
         access_token = data["access_token"]
@@ -324,6 +376,7 @@ def auth_tiktok_callback():
         """
 
     except Exception as e:
+        log.exception("Exceção na troca do código: %s", e)
         return f"Erro na troca do c\u00f3digo: {e}", 500
 
 
